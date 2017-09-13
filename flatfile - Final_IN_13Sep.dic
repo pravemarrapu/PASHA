@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlatDataDef name="flat_text" escape="" recSep="\n" fieldSep="," fieldAutoTrim="false">
+    <RecordSet name="record_set1">
+        <Record ref="Flatfile" />
+    </RecordSet>
+    <RecordsDef>
+        <Record name="Flatfile" instance="c:\users\user\desktop\flatfile\single sample.txt" recordNo="3">
+            <Field name="ContainerNbr" dataType="AN" />
+            <Field name="BookingNbr" dataType="AN" />
+            <Field name="VesselId" dataType="AN" />
+            <Field name="VGMWeight" dataType="AN" />
+            <Field name="WeightUnit" dataType="AN" />
+        </Record>
+    </RecordsDef>
+</FlatDataDef>
+
