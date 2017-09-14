@@ -68,6 +68,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 Unit activeUnit
                 if (canProceedToUpdate(activeUnit, preadviseTransaction)) {
                     log("Active Unit :: " + activeUnit);
+                    activeUnit = getUnit(preadviseTransaction.getEdiContainer().getContainerNbr())
                     EdiContainer ctr = preadviseTransaction.getEdiContainer()
                     Equipment equipment = activeUnit.getUnitEquipment();
                     log("Current Equipment :: " + equipment);
