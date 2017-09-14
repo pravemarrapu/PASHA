@@ -140,6 +140,10 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         } else {
             String ctrGrossWtUnit = ctr.getContainerGrossWtUnit();
             inUnit = getUnit(ctr.getContainerNbr());
+            if (inUnit == null) {
+                appendToMessageCollector("Unit does not exists");
+                return false
+            }
             if (!FreightKindEnum.MTY.equals(inUnit.getUnitFreightKind()) && ctrGrossWtUnit == null) {
                 appendToMessageCollector("File Does not contain Container Gross Weight");
                 return false;
@@ -147,11 +151,6 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
             if (!FreightKindEnum.MTY.equals(inUnit.getUnitFreightKind()) && ctrGrossWtUnit.equals("QT") || ctrGrossWtUnit.equals("LT") || ctrGrossWtUnit.equals("ST") || ctrGrossWtUnit.equals("MT")) {
                 appendToMessageCollector("Weight type is not correct");
                 return false;
-            }
-
-            if (inUnit == null) {
-                appendToMessageCollector("Unit does not exists");
-                return false
             }
             if (inUnit.getUnitLineOperator() != null && ctr.getContainerOperator() != null
                     && !(inUnit.getUnitLineOperator().getBzuId().equals(ctr.getContainerOperator().getOperator()))) {
