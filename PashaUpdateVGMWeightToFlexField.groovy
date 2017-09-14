@@ -152,7 +152,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 return false
             }
             if (inUnit.getUnitLineOperator() != null && ctr.getContainerOperator() != null
-                    && inUnit.getUnitLineOperator().getBzuId().equals(ctr.getContainerOperator().getOperator())) {
+                    && !(inUnit.getUnitLineOperator().getBzuId().equals(ctr.getContainerOperator().getOperator()))) {
                 appendToMessageCollector("Line Operator mismatch with Unit");
                 return false
             }
