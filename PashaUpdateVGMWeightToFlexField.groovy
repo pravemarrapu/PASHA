@@ -137,12 +137,12 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
             appendToMessageCollector("File Does not contain container number");
             return false;
         } else {
-            String ctrGrossWt = ctr.getContainerGrossWt();
-            if (ctrGrossWt == null) {
+            String ctrGrossWtUnit = ctr.getContainerGrossWtUnit();
+            if (ctrGrossWtUnit == null) {
                 appendToMessageCollector("File Does not contain Container Gross Weight");
                 return false;
             }
-            if (ctrGrossWt.equals("QT") || ctrGrossWt.equals("LT") || ctrGrossWt.equals("ST") || ctrGrossWt.equals("MT")) {
+            if (ctrGrossWtUnit.equals("QT") || ctrGrossWtUnit.equals("LT") || ctrGrossWtUnit.equals("ST") || ctrGrossWtUnit.equals("MT")) {
                 appendToMessageCollector("Weight type is not correct");
                 return false;
             }
