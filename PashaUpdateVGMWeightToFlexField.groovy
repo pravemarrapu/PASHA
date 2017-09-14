@@ -54,156 +54,138 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
     @Override
     public void beforeEdiPost(XmlObject inXmlTransactionDocument, Map inParams) {
         log("Inside PashaUpdateVGMWeightToFlexField :: START");
-
         Serializable batchGKey = inParams.get("BATCH_GKEY");
         EdiBatch ediBatch = (EdiBatch) HibernateApi.getInstance().load(EdiBatch.class, batchGKey);
-
         inParams.put(EdiConsts.SKIP_POSTER, Boolean.TRUE);
-
         PreadviseTransactionsDocument preadviseDocument = (PreadviseTransactionsDocument) inXmlTransactionDocument;
         PreadviseTransactionsDocument.PreadviseTransactions preadviseTransactions = preadviseDocument.getPreadviseTransactions();
         List<PreadviseTransactionDocument.PreadviseTransaction> list = preadviseTransactions.getPreadviseTransactionList();
-
         if (list.isEmpty()) {
             throw BizFailure.create("There is no transaction in the batch");
         }
         try {
             for (PreadviseTransactionDocument.PreadviseTransaction preadviseTransaction : list) {
-                EdiContainer ctr = preadviseTransaction.getEdiContainer()
-                if (ctr == null) {
-                    appendToMessageCollector("File Does not contain container number");
-                    log("File Does not contain container number");
-                    ContextHelper.getThreadEdiPostingContext().throwIfAnyViolations();
-                } else {
-                    String ctrNbr = ctr.getContainerNbr()
-                    log("Container Number " + ctrNbr);
-                    if (ctrNbr == null) {
-                        appendToMessageCollector("File Does not contain container number");
-                        log("File Does not contain container number");
-                    }
-
-                    EdiBooking booking = preadviseTransaction.getEdiBooking();
-                    if (booking == null) {
-                        appendToMessageCollector("File Does not contain booking number");
-                        log("File Does not consist booking details");
-                    }
-
-                    EdiFlexFields flexFields = preadviseTransaction.getEdiFlexFields();
-
-                    Unit activeUnit = getUnit(ctrNbr);
-
-                    EqBaseOrder bookingNbr = null;
-                    log("Transaction Unit " + activeUnit);
-                    if (activeUnit != null) {
-                        bookingNbr = activeUnit.getDepartureOrder();
-                    }
-                    if (activeUnit == null) {
-                        appendToMessageCollector("Unit does not exists");
-                        log("Unit does not exists" + activeUnit);
-                    }
-
-                    EdiOperator ctrOperator = ctr.getContainerOperator();
-                    String operator = ctrOperator.getOperator();
-                    log("Unit Line Operator" + activeUnit.getUnitLineOperator().getBzuId() + " " + operator)
-                    if (activeUnit.getUnitLineOperator().getBzuId().equals(operator)) {
-                        String ctrGrossWt = ctr.getContainerGrossWtUnit();
-                        String bkgNbr = booking.getBookingNbr();
-                        String vesId = null;
-
-                        EdiCarrierVisit vessel = preadviseTransaction.getEdiOutboundVisit();
-
-                        if (vessel != null) {
-                            EdiVesselVisit vesselVisit = vessel.getEdiVesselVisit();
-                            if (vesselVisit != null) {
-                                vesId = vesselVisit.getVesselId();
+                Unit activeUnit
+                if (canProceedToUpdate(activeUnit, preadviseTransaction)) {
+                    log("Active Unit :: " + activeUnit);
+                    EdiContainer ctr = preadviseTransaction.getEdiContainer()
+                    Equipment equipment = activeUnit.getUnitEquipment();
+                    log("Current Equipment :: " + equipment);
+                    String ctrGrossWt = ctr.getContainerGrossWtUnit();
+                    if (FreightKindEnum.MTY.equals(activeUnit.getUnitFreightKind())) {
+                        log("Freight Kind is Empty, updating Equipment Tare Wt" + equipment.getEqTareWeightKg());
+                        activeUnit.setUnitFlexString12(equipment.getEqTareWeightKg().toString());
+                    } else if (FreightKindEnum.FCL.equals(activeUnit.getUnitFreightKind()) || FreightKindEnum.LCL.equals(activeUnit.getUnitFreightKind())) {
+                        log("Inside FCL/LCL condition");
+                        EdiFlexFields flexFields = preadviseTransaction.getEdiFlexFields();
+                        if (flexFields == null) {
+                            appendToMessageCollector("File Does not contain proper weight");
+                            log("File Does not contain proper weight");
+                        } else {
+                            String VgmWt = flexFields.getUnitFlexString12();
+                            if (VgmWt == null) {
+                                appendToMessageCollector("File Does not contain proper weight");
+                                log("File Does not contain proper weight");
                             }
-                        }
 
-                        if (UnitVisitStateEnum.ACTIVE.equals(activeUnit.getUnitVisitState())) {
-                            log("For the Unit " + activeUnit + "Updating the flex field value");
+                            if (VgmWt.toDouble() < equipment.getEqTareWeightKg()) {
+                                appendToMessageCollector("Weight is less tare weight");
+                                log("Weight is less tare weight");
+                            }
 
-                            if (bookingNbr != null && bookingNbr.getEqboNbr().equals(bkgNbr) && activeUnit.getUnitActiveUfvNowActive() != null &&
-                                    (activeUnit.getUnitActiveUfvNowActive().getUfvActualObCv().getCvId().equals(vesId) || vesId == null)) {
-                                Equipment equipment = Equipment.findEquipment(ctrNbr);
-
-                                if (FreightKindEnum.MTY.equals(activeUnit.getUnitFreightKind())) {
-                                    //if (VgmWt == null || ctrGrossWt == null || vessel == null) {
-                                    log("Freight Kind is Empty, updating Equipment Tare Wt" + equipment.getEqTareWeightKg());
-                                    Double ctrTareWt = equipment.getEqTareWeightKg();
-                                    activeUnit.setUnitFlexString12(ctrTareWt.toString());
-                                    //}
-                                } else if (FreightKindEnum.FCL.equals(activeUnit.getUnitFreightKind()) || FreightKindEnum.LCL.equals(activeUnit.getUnitFreightKind())) {
-                                    log("Inside FCL/LCL condition");
-                                    if (flexFields == null) {
-                                        appendToMessageCollector("File Does not contain proper weight");
-                                        log("File Does not contain proper weight");
-                                    }
-                                    String VgmWt = flexFields.getUnitFlexString12();
-                                    if (VgmWt == null) {
-                                        appendToMessageCollector("File Does not contain proper weight");
-                                        log("File Does not contain proper weight");
-                                    }
-                                    if (ctrGrossWt == null) {
-                                        appendToMessageCollector("File Does not contain Container Gross Weight");
-                                        log("File Does not contain Container Gross Weight");
-                                    }
-                                    if (ctrGrossWt.equals("QT") || ctrGrossWt.equals("LT") || ctrGrossWt.equals("ST") || ctrGrossWt.equals("MT")) {
-                                        appendToMessageCollector("Weight type is not correct");
-                                        log("Weight type is not correct");
-                                    }
-                                    if (VgmWt.toDouble() < equipment.getEqTareWeightKg()) {
-                                        appendToMessageCollector("Weight is less tare weight");
-                                        log("Weight is less tare weight");
-                                    }
-
-                                    if (equipment.getEqSafeWeightKg() == 0.0D) {
-                                        EquipType eqType = equipment.getEqEquipType();
-                                        Double eqTypeSafeWt = eqType.getEqtypSafeWeightKg();
-                                        if (eqTypeSafeWt == 0.0D) {
-                                            updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
-                                        } else if (eqTypeSafeWt > 0.0D) {
-                                            if (VgmWt.toDouble() > eqTypeSafeWt) {
-                                                appendToMessageCollector("Weight is greater than equipment type safe weight");
-                                                log("Weight is greater than equipment type safe weight");
-                                            } else {
-                                                updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
-                                            }
-                                        }
+                            if (equipment.getEqSafeWeightKg() == 0.0D) {
+                                EquipType eqType = equipment.getEqEquipType();
+                                Double eqTypeSafeWt = eqType.getEqtypSafeWeightKg();
+                                if (eqTypeSafeWt == 0.0D) {
+                                    updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
+                                } else if (eqTypeSafeWt > 0.0D) {
+                                    if (VgmWt.toDouble() > eqTypeSafeWt) {
+                                        appendToMessageCollector("Weight is greater than equipment type safe weight");
+                                        log("Weight is greater than equipment type safe weight");
                                     } else {
-                                        if (VgmWt.toDouble() > equipment.getEqSafeWeightKg()) {
-                                            appendToMessageCollector("Weight is greater than safe weight");
-                                            log("Weight is greater than safe weight");
-                                        } else {
-                                            updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
-                                        }
+                                        updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
                                     }
-                                    HibernateApi.getInstance().save(activeUnit);
-                                    HibernateApi.getInstance().flush();
                                 }
                             } else {
-                                if (activeUnit.getUnitActiveUfvNowActive() != null && !(activeUnit.getUnitActiveUfvNowActive().getUfvActualObCv().getCvId().equals(vesId))) {
-                                    appendToMessageCollector("Vessel Visit mismatch with Unit");
-                                    log("Vessel Visit mismatch with Unit");
-                                }
-                                if (bookingNbr == null) {
-                                    appendToMessageCollector("No booking associated with Unit");
-                                    log("No booking associated with Unit");
-                                } else if (!(bookingNbr.getEqboNbr().equals(bkgNbr))) {
-                                    appendToMessageCollector("Booking mismatch with Unit");
-                                    log("Booking mismatch with Unit");
+                                if (VgmWt.toDouble() > equipment.getEqSafeWeightKg()) {
+                                    appendToMessageCollector("Weight is greater than safe weight");
+                                    log("Weight is greater than safe weight");
+                                } else {
+                                    updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
                                 }
                             }
                         }
+                        HibernateApi.getInstance().save(activeUnit);
+                        HibernateApi.getInstance().flush();
                     } else {
-                        appendToMessageCollector("Line Operator mismatch with Unit");
-                        log("Line Operator  mismatch with Unit");
+                        ContextHelper.getThreadEdiPostingContext().throwIfAnyViolations();
                     }
                 }
-
             }
         } finally {
             inParams.put(EdiConsts.SKIP_POSTER, Boolean.TRUE);
         }
+    }
+
+    private boolean canProceedToUpdate(Unit inUnit, PreadviseTransactionDocument.PreadviseTransaction preadviseTransaction) {
+        EdiContainer ctr = preadviseTransaction.getEdiContainer();
+        if (ctr == null) {
+            appendToMessageCollector("File Does not contain container number")
+            return false;
+        }
+        if (ctr.getContainerNbr() == null) {
+            appendToMessageCollector("File Does not contain container number");
+            return false;
+        } else {
+            String ctrGrossWt = ctr.getContainerGrossWt();
+            if (ctrGrossWt == null) {
+                appendToMessageCollector("File Does not contain Container Gross Weight");
+                return false;
+            }
+            if (ctrGrossWt.equals("QT") || ctrGrossWt.equals("LT") || ctrGrossWt.equals("ST") || ctrGrossWt.equals("MT")) {
+                appendToMessageCollector("Weight type is not correct");
+                return false;
+            }
+            inUnit = getUnit(ctr.getContainerNbr());
+            if (inUnit == null) {
+                appendToMessageCollector("Unit does not exists");
+                return false
+            }
+            if (inUnit.getUnitLineOperator() != null && ctr.getContainerOperator() != null
+                    && inUnit.getUnitLineOperator().getBzuId().equals(ctr.getContainerOperator().getOperator())) {
+                appendToMessageCollector("Line Operator mismatch with Unit");
+                return false
+            }
+            EqBaseOrder unitBooking = inUnit.getDepartureOrder();
+            if (unitBooking == null) {
+                appendToMessageCollector("No booking associated with Unit");
+                return false
+            }
+            EdiBooking ediBooking = preadviseTransaction.getEdiBooking();
+            if (ediBooking == null) {
+                appendToMessageCollector("File Does not contain booking number");
+                return false;
+            }
+            if (!unitBooking.getEqboNbr().equals(ediBooking.getBookingNbr())) {
+                appendToMessageCollector("Booking mismatch with Unit");
+                return false
+            }
+
+            String vesId = null;
+            EdiCarrierVisit vessel = preadviseTransaction.getEdiOutboundVisit();
+            if (vessel != null) {
+                EdiVesselVisit vesselVisit = vessel.getEdiVesselVisit();
+                if (vesselVisit != null) {
+                    vesId = vesselVisit.getVesselId();
+                }
+            }
+            if (inUnit.getUnitActiveUfvNowActive() != null && inUnit.getUnitActiveUfvNowActive().getUfvActualObCv().getCvId() &&
+                    !(inUnit.getUnitActiveUfvNowActive().getUfvActualObCv().getCvId().equals(vesId) || vesId == null)) {
+                appendToMessageCollector("Vessel Visit mismatch with Unit");
+                return false;
+            }
+        }
+        return true;
     }
 
     private Unit getUnit(String inCtrNbr) {
