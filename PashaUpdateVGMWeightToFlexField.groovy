@@ -4,7 +4,15 @@
  */
 
 
-import com.navis.argo.*
+import com.navis.argo.ArgoRefField
+import com.navis.argo.ContextHelper
+import com.navis.argo.EdiBooking
+import com.navis.argo.EdiCarrierVisit
+import com.navis.argo.EdiContainer
+import com.navis.argo.EdiFlexFields
+import com.navis.argo.EdiVesselVisit
+import com.navis.argo.PreadviseTransactionDocument
+import com.navis.argo.PreadviseTransactionsDocument
 import com.navis.argo.business.atoms.FreightKindEnum
 import com.navis.argo.business.atoms.UnitCategoryEnum
 import com.navis.argo.business.reference.EquipType
