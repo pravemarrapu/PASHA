@@ -82,13 +82,13 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                     long tareWtRoundedValue = 0L;
                     String tareAbbrevation = getMeasureType(ArgoRefField.EQ_TARE_WEIGHT_KG);
                     ctrTareWt = equipment.getEqTareWeightKg();
-                    tareWtRoundedValue = weightConvertion(tareAbbrevation, ctrTareWt);
+                    tareWtRoundedValue = weightConvertionForN4Fields(tareAbbrevation, ctrTareWt);
 
                     Double ctrSafeWt = 0.0D;
                     long safeWtRoundedValue = 0L;
                     String safeAbbrevation = getMeasureType(ArgoRefField.EQ_SAFE_WEIGHT_KG);
                     ctrSafeWt = equipment.getEqSafeWeightKg();
-                    safeWtRoundedValue = weightConvertion(safeAbbrevation, ctrSafeWt);
+                    safeWtRoundedValue = weightConvertionForN4Fields(safeAbbrevation, ctrSafeWt);
 
                     if (FreightKindEnum.MTY.equals(activeUnit.getUnitFreightKind())) {
                         log("Freight Kind is Empty, updating Equipment Tare Wt" + equipment.getEqTareWeightKg());
@@ -106,18 +106,11 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                 log("File Does not contain proper weight");
                             }
 
-                            long vgmRoundedValue = 0L;
-                            if ("KG".equals(ctrGrossWt)) {
-                                vgmRoundedValue = weightConvertion("KG", VgmWt.toDouble());
-                                if (vgmRoundedValue < tareWtRoundedValue) {
-                                    appendToMessageCollector("Weight is less tare weight");
-                                    log("Weight is less tare weight");
-                                }
-                            } else if ("LB".equals(ctrGrossWt)) {
-                                if (VgmWt.toDouble() < tareWtRoundedValue) {
-                                    appendToMessageCollector("Weight is less tare weight");
-                                    log("Weight is less tare weight");
-                                }
+                            String convertedVgmWt = weightConvertionForVGM(ctrGrossWt, VgmWt, activeUnit);
+                            long vgmRoundedValue = convertedVgmWt.toLong();
+                            if (vgmRoundedValue < tareWtRoundedValue) {
+                                appendToMessageCollector("Weight is less tare weight");
+                                log("Weight is less tare weight");
                             }
 
                             /*if (VgmWt.toDouble() < equipment.getEqTareWeightKg()) {
@@ -131,28 +124,26 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                 long eqTypeSafeWtRoundedValue = 0L;
                                 String eqTypeSafeAbbrevation = getMeasureType(ArgoRefField.EQTYP_SAFE_WEIGHT_KG);
                                 eqTypeSafeWt = eqType.getEqtypSafeWeightKg();
-                                eqTypeSafeWtRoundedValue = weightConvertion(eqTypeSafeAbbrevation, eqTypeSafeWt);
+                                eqTypeSafeWtRoundedValue = weightConvertionForN4Fields(eqTypeSafeAbbrevation, eqTypeSafeWt);
 
-                                if (eqTypeSafeWtRoundedValue.toDouble() == 0.0D) {
-                                    updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
-                                } else if (eqTypeSafeWtRoundedValue.toDouble() > 0.0D) {
-                                    vgmRoundedValue = vgmWeightValidation(ctrGrossWt, VgmWt);
+                                if (eqTypeSafeWtRoundedValue == 0.0D) {
+                                    activeUnit.setUnitFlexString12(convertedVgmWt);
+                                } else if (eqTypeSafeWtRoundedValue > 0.0D) {
                                     if (vgmRoundedValue > eqTypeSafeWtRoundedValue) {
+                                        log("VgmRoundedValue " + vgmRoundedValue + "EqTypeSafeWt " + eqTypeSafeWt)
                                         appendToMessageCollector("Weight is greater than equipment type safe weight");
                                         log("Weight is greater than equipment type safe weight");
                                     } else {
-                                        updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
+                                        activeUnit.setUnitFlexString12(convertedVgmWt);
                                     }
                                 }
                             } else {
                                 log("Vgm ROunded Value " + vgmRoundedValue);
-                                vgmRoundedValue = vgmWeightValidation(ctrGrossWt, VgmWt);
-
                                 if (vgmRoundedValue > safeWtRoundedValue) {
                                     appendToMessageCollector("Weight is greater than safe weight");
                                     log("Weight is greater than safe weight");
                                 } else {
-                                    updateVgmWeight(ctrGrossWt, VgmWt, activeUnit);
+                                    activeUnit.setUnitFlexString12(convertedVgmWt);
                                 }
                             }
                             HibernateApi.getInstance().save(activeUnit);
@@ -229,6 +220,12 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         return true;
     }
 
+    /**
+     * To get the actve export unit for the provided container number
+     *
+     * @param inCtrNbr
+     * @return
+     */
     private Unit getUnit(String inCtrNbr) {
         Equipment eq = Equipment.findEquipment(inCtrNbr);
         if (eq == null) {
@@ -252,28 +249,33 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
     }
 
     /**
-     * Method to convertPound to Kilogram
-     *
+     * This method will convert the VGM weight to lb's
+     * @param inCtrGrossWt
+     * @param inVgmWt
+     * @param inActiveUnit
      * @return
      */
-    private String convertLbtoKg(String inVgmWt) {
-        Double valueInKg = UnitUtils.convertTo(inVgmWt, MassUnitEnum.KILOGRAMS, MassUnitEnum.POUNDS);
-        log("valueInLb " + inVgmWt + " => valueInKg : " + String.valueOf(valueInLb));
-        return String.valueOf(valueInKg);
-    }
-
-    private void updateVgmWeight(String inCtrGrossWt, String inVgmWt, Unit inActiveUnit) {
+    private String weightConvertionForVGM(String inCtrGrossWt, String inVgmWt, Unit inActiveUnit) {
+        String roundedValue;
         if ("KG".equals(inCtrGrossWt)) {
             log("KG value setting to flexfield");
-            String roundedValue = convertKgtoLb(inCtrGrossWt);
-            inActiveUnit.setUnitFlexString12(roundedValue);
+            roundedValue = convertKgtoLb(inCtrGrossWt);
+            return roundedValue;
         } else if ("LB".equals(inCtrGrossWt)) {
             log("LB value setting to flexfield");
-            inActiveUnit.setUnitFlexString12(inVgmWt);
+            roundedValue = inVgmWt;
+            return roundedValue;
         }
+        return roundedValue;
     }
 
-    private long weightConvertion(String inAbbrevation, Double inCtrWt) {
+    /**
+     * This method will convert the Equipment Tare wt, Equipment type tare wt and Equipment type safe wt fields of N4 to Lb's
+     * @param inAbbrevation
+     * @param inCtrWt
+     * @return
+     */
+    private long weightConvertionForN4Fields(String inAbbrevation, Double inCtrWt) {
         if ("kg".equals(inAbbrevation) || "KG".equals(inAbbrevation)) {
             String roundedValue = convertKgtoLb(inCtrWt.toString());
             log("Converted Value" + roundedValue);
@@ -286,6 +288,11 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         return 0L;
     }
 
+    /**
+     * This method will return Mass unit of the provided metafield
+     * @param inMetaField
+     * @return
+     */
     private String getMeasureType(MetafieldId inMetaField) {
         Measured tareMeasure = FrameworkPresentationUtils.getMetafield(inMetaField).getMeasured();
         MeasurementUnit tareMeasureUnit = tareMeasure.getUserUnit();
@@ -295,16 +302,10 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         return tareAbbrevation;
     }
 
-    private long vgmWeightValidation(String inCtrGrossWt, String inVgmWt) {
-        long vgmRoundedValue = 0L;
-        if ("KG".equals(inCtrGrossWt)) {
-            vgmRoundedValue = weightConvertion("KG", inVgmWt.toDouble());
-        } else if ("LB".equals(inCtrGrossWt)) {
-            vgmRoundedValue = weightConvertion("LB", inVgmWt.toDouble());
-        }
-
-    }
-
+    /**
+     * Message Collector
+     * @param inMessage
+     */
     private void appendToMessageCollector(String inMessage) {
         MessageCollectorUtils.getMessageCollector().appendMessage(BizFailure
                 .create(ArgoPropertyKeys.INFO, null, inMessage));
