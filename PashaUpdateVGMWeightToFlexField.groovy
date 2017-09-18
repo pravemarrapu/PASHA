@@ -297,8 +297,8 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
     }
 
     private boolean matchesAnyRefValue(GeneralReference generalReference, String inUnitLineOpId) {
-        if (generalReference.getRefValue1(inUnitLineOpId) || generalReference.getRefValue2(inUnitLineOpId) || generalReference.getRefValue3(inUnitLineOpId)
-                || generalReference.getRefValue4(inUnitLineOpId) || generalReference.getRefValue5(inUnitLineOpId) || generalReference.getRefValue6(inUnitLineOpId)) {
+        if (inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue1()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue2()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue3())
+                || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue4()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue5()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue6())) {
             return true
         }
         return false
