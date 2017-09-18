@@ -15,11 +15,14 @@ import com.navis.argo.PreadviseTransactionDocument
 import com.navis.argo.PreadviseTransactionsDocument
 import com.navis.argo.business.atoms.FreightKindEnum
 import com.navis.argo.business.atoms.UnitCategoryEnum
+import com.navis.argo.business.model.GeneralReference
 import com.navis.argo.business.reference.EquipType
 import com.navis.argo.business.reference.Equipment
+import com.navis.argo.business.reference.LineOperator
 import com.navis.argo.presentation.controller.EquipmentTypeFormController
 import com.navis.edi.business.edimodel.EdiConsts
 import com.navis.edi.business.entity.EdiBatch
+import com.navis.edi.business.entity.EdiSession
 import com.navis.external.edi.entity.AbstractEdiPostInterceptor
 import com.navis.framework.business.Roastery
 import com.navis.framework.business.atoms.MassUnitEnum
@@ -37,6 +40,8 @@ import com.navis.inventory.business.api.UnitFinder
 import com.navis.inventory.business.units.EqBaseOrder
 import com.navis.inventory.business.units.Unit
 import org.apache.xmlbeans.XmlObject
+
+import javax.sound.sampled.Line
 
 /**
  * This Edi Post Interceptor is written to update the flex field "UnitFlexString12" with VGM Weight.
@@ -69,8 +74,15 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
     @Override
     public void beforeEdiPost(XmlObject inXmlTransactionDocument, Map inParams) {
         log("Inside PashaUpdateVGMWeightToFlexField :: START");
-        Serializable batchGKey = inParams.get("BATCH_GKEY");
-        EdiBatch ediBatch = (EdiBatch) HibernateApi.getInstance().load(EdiBatch.class, batchGKey);
+        Serializable sessionGkey = inParams.get("SESSION_GKEY");
+        log("Current EDI Session Gkey :: $sessionGkey")
+        EdiSession ediSession = (EdiBatch) HibernateApi.getInstance().load(EdiSession.class, sessionGkey);
+        LineOperator sessionLineOperator;
+        if (ediSession.getEdisessTradingPartner().getEdiptnrBusinessUnit() != null) {
+            sessionLineOperator = LineOperator.resolveLineOprFromScopedBizUnit(ediSession.getEdisessTradingPartner().getEdiptnrBusinessUnit());
+            log("Current EDI Session Line Operator :: $sessionLineOperator")
+        }
+
         inParams.put(EdiConsts.SKIP_POSTER, Boolean.TRUE);
         PreadviseTransactionsDocument preadviseDocument = (PreadviseTransactionsDocument) inXmlTransactionDocument;
         PreadviseTransactionsDocument.PreadviseTransactions preadviseTransactions = preadviseDocument.getPreadviseTransactions();
@@ -81,7 +93,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         try {
             for (PreadviseTransactionDocument.PreadviseTransaction preadviseTransaction : list) {
                 Unit activeUnit
-                if (canProceedToUpdate(activeUnit, preadviseTransaction)) {
+                if (canProceedToUpdate(activeUnit, preadviseTransaction, sessionLineOperator)) {
                     log("Active Unit :: " + activeUnit);
                     activeUnit = getUnit(preadviseTransaction.getEdiContainer().getContainerNbr())
                     EdiContainer ctr = preadviseTransaction.getEdiContainer()
@@ -162,7 +174,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         }
     }
 
-    private boolean canProceedToUpdate(Unit inUnit, PreadviseTransactionDocument.PreadviseTransaction preadviseTransaction) {
+    private boolean canProceedToUpdate(Unit inUnit, PreadviseTransactionDocument.PreadviseTransaction preadviseTransaction, LineOperator inLineOperator) {
         EdiContainer ctr = preadviseTransaction.getEdiContainer();
         if (ctr == null) {
             appendToMessageCollector("File Does not contain container number")
@@ -186,10 +198,25 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 appendToMessageCollector("Weight type is not correct");
                 return false;
             }
-            if (inUnit.getUnitLineOperator() != null && ctr.getContainerOperator() != null
-                    && !(inUnit.getUnitLineOperator().getBzuId().equals(ctr.getContainerOperator().getOperator()))) {
-                appendToMessageCollector("Line Operator mismatch with Unit");
-                return false
+            if (inUnit.getUnitLineOperator() != null && inLineOperator != null) {
+                log("Unit Line Operator :: "+inUnit.getUnitLineOperator() +" and session Line Operator :: "+inLineOperator)
+                if(!(inUnit.getUnitLineOperator().equals(inLineOperator))){
+                    GeneralReference lineOpGenRef = GeneralReference.findUniqueEntryById(LINE_OP_GENREF_ID, inLineOperator.getBzuId())
+                    log("Line Operator Gen reference :: "+lineOpGenRef)
+                    if(lineOpGenRef != null){
+                        log("Line Operator Gen reference Ref Value 1 :: "+lineOpGenRef.getRefValue1())
+                        if(!lineOpGenRef.getRefValue1().equalsIgnoreCase(inLineOperator.getBzuId())){
+                            appendToMessageCollector("Line Operator mismatch with Unit");
+                            return false
+                        }
+                    }else{
+                        appendToMessageCollector("Line Operator mismatch with Unit");
+                        return false
+                    }
+                }
+
+            }else{
+                appendToMessageCollector("Required fields (Unit Line Operator / Session Line Operator) missing)");
             }
             EqBaseOrder unitBooking = inUnit.getDepartureOrder();
             if (unitBooking == null) {
@@ -292,4 +319,6 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         MessageCollectorUtils.getMessageCollector().appendMessage(BizFailure
                 .create(ArgoPropertyKeys.INFO, null, inMessage));
     }
+
+    private final String LINE_OP_GENREF_ID = "FALT_FILE_LINE_OP";
 }
