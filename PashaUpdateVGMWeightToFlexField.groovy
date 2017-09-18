@@ -155,7 +155,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                             Double vgmRoundedValue = convertedVgmWt.toDouble();
 
                             //convert VGM weight from KG to LB inorder to update to flex field
-                            String roundedValue = convertKgtoLb(convertedVgmWt);
+                            String roundedValue = convertKGtoLB(convertedVgmWt);
                             long lbRoundedVal = Math.round(roundedValue.toDouble());
 
                             //Tare Wt comparision
