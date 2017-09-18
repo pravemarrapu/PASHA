@@ -4,7 +4,15 @@
  */
 
 
-import com.navis.argo.*
+import com.navis.argo.ArgoPropertyKeys
+import com.navis.argo.ContextHelper
+import com.navis.argo.EdiBooking
+import com.navis.argo.EdiCarrierVisit
+import com.navis.argo.EdiContainer
+import com.navis.argo.EdiFlexFields
+import com.navis.argo.EdiVesselVisit
+import com.navis.argo.PreadviseTransactionDocument
+import com.navis.argo.PreadviseTransactionsDocument
 import com.navis.argo.business.atoms.FreightKindEnum
 import com.navis.argo.business.atoms.UnitCategoryEnum
 import com.navis.argo.business.model.GeneralReference
@@ -83,15 +91,34 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                     log("Current Equipment :: " + equipment);
                     String ctrGrossWt = ctr.getContainerGrossWtUnit();
 
+                    //convert VGM field to KG based on ctrGrossWtUnit if it is in LB's for comparision with fields such
+                    // as Equipment Tare Wt, Safe Wt, Equipment Type Safe Wt and Tare Wt, because by default fields
+                    //above fields will come here in KG's.
+                    String convertedVgmWt = weightConvertionForVGM(ctrGrossWt, VgmWt, activeUnit);
+                    Double vgmRoundedValue = convertedVgmWt.toDouble();
+
+                    //convert VGM weight from KG to LB inorder to update to flex field
+                    String roundedValue = convertKgtoLb(convertedVgmWt);
+                    long lbRoundedVal = Math.round(roundedValue.toDouble());
+
                     Double ctrTareWt = 0.0D;
                     ctrTareWt = equipment.getEqTareWeightKg();
 
                     Double ctrSafeWt = 0.0D;
                     ctrSafeWt = equipment.getEqSafeWeightKg();
 
+                    EquipType eqType = equipment.getEqEquipType();
+
                     if (FreightKindEnum.MTY.equals(activeUnit.getUnitFreightKind())) {
                         log("Freight Kind is Empty, updating Equipment Tare Wt" + equipment.getEqTareWeightKg());
-                        activeUnit.setUnitFlexString12(ctrTareWt.toString());
+                        if (ctrTareWt == 0.0D) {
+                            Double eqTypeTareeWt = eqType.getTareWeightKg();
+                            if (eqTypeTareeWt == 0.0D) {
+                                activeUnit.setUnitFlexString12(lbRoundedVal.toString());
+                            }
+                        } else {
+                            activeUnit.setUnitFlexString12(lbRoundedVal.toString());
+                        }
                     } else if (FreightKindEnum.FCL.equals(activeUnit.getUnitFreightKind()) || FreightKindEnum.LCL.equals(activeUnit.getUnitFreightKind())) {
                         log("Inside FCL/LCL condition");
                         EdiFlexFields flexFields = preAdviseTransaction.getEdiFlexFields();
@@ -105,21 +132,27 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                 log("File Does not contain proper weight");
                             }
 
-                            String convertedVgmWt = weightConversionForVGM(ctrGrossWt, VgmWt);
-                            Double vgmRoundedValue = convertedVgmWt.toDouble();
-                            if (vgmRoundedValue < ctrTareWt) {
+                            //Tare Wt comparision
+                            if (ctrTareWt == 0.0D) {
+                                Double eqTypeTareWt = eqType.getTareWeightKg();
+                                if (eqTypeTareWt == 0.0D) {
+                                } else {
+                                    if (vgmRoundedValue < eqTypeTareWt) {
+                                        appendToMessageCollector("Weight is less Equipment Type tare weight");
+                                        log("Weight is less Equipment Type tare weight");
+                                    }
+                                }
+                            } else if (vgmRoundedValue < ctrTareWt) {
                                 appendToMessageCollector("Weight is less tare weight");
                                 log("Weight is less tare weight");
                             }
 
+                            //Safe Wt comparision
                             if (ctrSafeWt == 0.0D) {
-                                EquipType eqType = equipment.getEqEquipType();
                                 Double eqTypeSafeWt = 0.0D;
                                 eqTypeSafeWt = eqType.getEqtypSafeWeightKg();
 
                                 if (eqTypeSafeWt == 0.0D) {
-                                    String roundedValue = convertKGtoLB(convertedVgmWt);
-                                    long lbRoundedVal = Math.round(roundedValue.toDouble());
                                     activeUnit.setUnitFlexString12(lbRoundedVal.toString());
                                 } else if (eqTypeSafeWt > 0.0D) {
                                     if (vgmRoundedValue > eqTypeSafeWt) {
@@ -127,8 +160,6 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                         appendToMessageCollector("Weight is greater than equipment type safe weight");
                                         log("Weight is greater than equipment type safe weight");
                                     } else {
-                                        String roundedValue = convertKGtoLB(convertedVgmWt);
-                                        long lbRoundedVal = Math.round(roundedValue.toDouble());
                                         activeUnit.setUnitFlexString12(lbRoundedVal.toString());
                                     }
                                 }
@@ -138,8 +169,6 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                     appendToMessageCollector("Weight is greater than safe weight");
                                     log("Weight is greater than safe weight");
                                 } else {
-                                    String roundedValue = convertKGtoLB(convertedVgmWt);
-                                    long lbRoundedVal = Math.round(roundedValue.toDouble());
                                     activeUnit.setUnitFlexString12(lbRoundedVal.toString());
                                 }
                             }
@@ -190,7 +219,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                         if (lineOpGenRef.getRefValue1() != null && !lineOpGenRef.getRefValue1().equalsIgnoreCase(inUnit.getUnitLineOperator().getBzuId())) {
                             appendToMessageCollector("Line Operator mismatch with Unit");
                             return false
-                        }else if(lineOpGenRef.getRefValue1() == null){
+                        } else if (lineOpGenRef.getRefValue1() == null) {
                             appendToMessageCollector("Line Operator mismatch with Unit");
                             return false
                         }
