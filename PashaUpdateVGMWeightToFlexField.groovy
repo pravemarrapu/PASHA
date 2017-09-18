@@ -320,5 +320,5 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 .create(ArgoPropertyKeys.INFO, null, inMessage));
     }
 
-    private final String LINE_OP_GENREF_ID = "FALT_FILE_LINE_OP";
+    private final String LINE_OP_GENREF_ID = "FLAT_FILE_LINE_OP";
 }
