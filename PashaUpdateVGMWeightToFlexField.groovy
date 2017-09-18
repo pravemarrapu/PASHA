@@ -241,11 +241,10 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                     GeneralReference lineOpGenRef = GeneralReference.findUniqueEntryById(LINE_OP_GEN_REF_ID, inLineOperator.getBzuId())
                     log("Line Operator Gen reference :: " + lineOpGenRef)
                     if (lineOpGenRef != null) {
-                        log("Line Operator Gen reference Ref Value 1 :: " + lineOpGenRef.getRefValue1())
-                        if (lineOpGenRef.getRefValue1() != null && !lineOpGenRef.getRefValue1().equalsIgnoreCase(inUnit.getUnitLineOperator().getBzuId())) {
+                        if (allRefValuesEmpty(lineOpGenRef)) {
                             appendToMessageCollector("Line Operator mismatch with Unit");
                             return false
-                        } else if (lineOpGenRef.getRefValue1() == null) {
+                        } else if (!matchesAnyRefValue(lineOpGenRef, inUnit.getUnitLineOperator().getBzuId())) {
                             appendToMessageCollector("Line Operator mismatch with Unit");
                             return false
                         }
@@ -254,7 +253,6 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                         return false
                     }
                 }
-
             } else {
                 appendToMessageCollector("Required fields (Unit Line Operator / Session Line Operator) missing)");
             }
@@ -290,12 +288,27 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         return true;
     }
 
-    /**
-     * To get the active export unit for the provided container number
-     *
-     * @param inCtrNbr
-     * @return
-     */
+    private boolean allRefValuesEmpty(GeneralReference generalReference) {
+        if (generalReference.getRefValue1() == null && generalReference.getRefValue2() == null && generalReference.getRefValue3() == null
+                && generalReference.getRefValue4() == null && generalReference.getRefValue5() == null && generalReference.getRefValue6() == null) {
+            return true
+        }
+        return false
+    }
+
+    private boolean matchesAnyRefValue(GeneralReference generalReference, String inUnitLineOpId) {
+        if (generalReference.getRefValue1(inUnitLineOpId) || generalReference.getRefValue2(inUnitLineOpId) || generalReference.getRefValue3(inUnitLineOpId)
+                || generalReference.getRefValue4(inUnitLineOpId) || generalReference.getRefValue5(inUnitLineOpId) || generalReference.getRefValue6(inUnitLineOpId)) {
+            return true
+        }
+        return false
+    }
+/**
+ * To get the active export unit for the provided container number
+ *
+ * @param inCtrNbr
+ * @return
+ */
     private Unit getUnit(String inCtrNbr) {
         Equipment eq = Equipment.findEquipment(inCtrNbr);
         if (eq == null) {
