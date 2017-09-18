@@ -187,7 +187,10 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                     log("Line Operator Gen reference :: " + lineOpGenRef)
                     if (lineOpGenRef != null) {
                         log("Line Operator Gen reference Ref Value 1 :: " + lineOpGenRef.getRefValue1())
-                        if (!lineOpGenRef.getRefValue1().equalsIgnoreCase(inUnit.getUnitLineOperator().getBzuId())) {
+                        if (lineOpGenRef.getRefValue1() != null && !lineOpGenRef.getRefValue1().equalsIgnoreCase(inUnit.getUnitLineOperator().getBzuId())) {
+                            appendToMessageCollector("Line Operator mismatch with Unit");
+                            return false
+                        }else if(lineOpGenRef.getRefValue1() == null){
                             appendToMessageCollector("Line Operator mismatch with Unit");
                             return false
                         }
