@@ -278,7 +278,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
             EdiCarrierVisit vessel = preAdviseTransaction.getEdiOutboundVisit();
             log("vessel  " + vessel);
             if (vessel == null) {
-                appendToMessageCollector("Vessel Visit mismatch with Unit");
+                appendToMessageCollector("File Does not contain OutVoyage / Lloyds / Vessel Name in Vessel Details");
                 return false;
             } else if (vessel != null) {
                 EdiVesselVisit vesselVisit = vessel.getEdiVesselVisit();
