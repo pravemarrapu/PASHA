@@ -31,6 +31,7 @@ import com.navis.framework.util.unit.UnitUtils
 import com.navis.inventory.business.api.UnitFinder
 import com.navis.inventory.business.units.EqBaseOrder
 import com.navis.inventory.business.units.Unit
+import com.navis.vessel.business.schedule.VesselVisitDetails
 import org.apache.xmlbeans.XmlObject
 
 /**
@@ -271,18 +272,39 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 return false
             }
 
+            String outVoyageNbr = null;
             String vesId = null;
+            String vesName = null;
             EdiCarrierVisit vessel = preAdviseTransaction.getEdiOutboundVisit();
-            if (vessel != null) {
-                EdiVesselVisit vesselVisit = vessel.getEdiVesselVisit();
-                if (vesselVisit != null) {
-                    vesId = vesselVisit.getVesselId();
-                }
-            }
-            if (inUnit.getUnitActiveUfvNowActive() != null && inUnit.getUnitActiveUfvNowActive().getUfvActualObCv().getCvId() &&
-                    !(inUnit.getUnitActiveUfvNowActive().getUfvActualObCv().getCvId().equals(vesId) || vesId == null)) {
+            log("vessel  " + vessel);
+            if (vessel == null) {
                 appendToMessageCollector("Vessel Visit mismatch with Unit");
                 return false;
+            } else if (vessel != null) {
+                EdiVesselVisit vesselVisit = vessel.getEdiVesselVisit();
+                if (vesselVisit != null) {
+                    outVoyageNbr = vesselVisit.getOutVoyageNbr();
+                    vesId = vesselVisit.getVesselId();
+                    vesName = vesselVisit.getVesselName();
+                }
+            }
+            VesselVisitDetails vvd = null;
+            String unitsLlyodsId = null;
+            if (inUnit.getUnitActiveUfvNowActive() != null && inUnit.getUnitActiveUfvNowActive().getUfvActualObCv() != null) {
+                vvd = VesselVisitDetails.resolveVvdFromCv(inUnit.getUnitActiveUfvNowActive().getUfvObCv());
+                if (vvd != null && vvd.getVvdVessel() != null) {
+                    unitsLlyodsId = vvd.getVvdVessel().getVesLloydsId();
+                    if (!(vesId.equals(unitsLlyodsId))) {
+                        appendToMessageCollector("Lloyds Id mismatch with Unit");
+                        return false;
+                    } else if (!(outVoyageNbr.equals(vvd.getVvdObVygNbr()))) {
+                        appendToMessageCollector("Outbound Voyage mismatch with Unit");
+                        return false;
+                    } else if (!(vesName.equals(vvd.getVvdVessel().getVesName()))) {
+                        appendToMessageCollector("Vessel Name mismatch with Unit");
+                        return false;
+                    }
+                }
             }
         }
         return true;
