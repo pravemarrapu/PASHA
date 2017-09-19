@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlatDataDef name="flat_text" escape="" recSep="\n" fieldSep="," fieldAutoTrim="false">
+    <RecordSet name="Flatfile" description="Flatfile created for pasha">
+        <Record ref="Weserve_Flatfile" />
+    </RecordSet>
+    <RecordsDef>
+        <Record name="Weserve_Flatfile" description="Dictionary for flatfile-Pasha" instance="C:\Users\Vostro\Documents\Pasha Group\Pasha flatfile\single sample for regression.txt" recordNo="0">
+            <Field name="Container_Nbr" dataType="AN" />
+            <Field name="Booking_Nbr" dataType="AN" />
+            <Field name="Vesselid" dataType="AN" />
+            <Field name="OB_voyage" dataType="AN" />
+            <Field name="Vessel_Name" dataType="AN" />
+            <Field name="VGM_Wt" dataType="AN" />
+            <Field name="Wt_Unit" dataType="AN" />
+        </Record>
+    </RecordsDef>
+</FlatDataDef>
+
