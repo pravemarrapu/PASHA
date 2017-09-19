@@ -2,7 +2,7 @@
 <mg:Template xmlns:mg="http://www.xenos.com/transform" mg:version="6.1.13" mg:build="2010-12-07" mg:jvmVersion="23.25-b01">
     <mg:Map>
         <mg:Source mg:id="PRIMITIVE" mg:format="FLATTEXT">
-            <mg:Attribute mg:name="structure" mg:value="flatfile - Final_IN.dic" />
+            <mg:Attribute mg:name="structure" mg:value="flatfile - Final_IN_19_sep.dic" />
             <mg:Attribute mg:name="instance" mg:value="single sample for regression.txt" />
             <mg:Attribute mg:name="validating" mg:value="false" />
         </mg:Source>
@@ -953,7 +953,7 @@
                             <mg:value-of mg:select="''" />
                         </mg:Attribute>
                         <mg:Attribute mg:name="edi:containerGrossWtUnit" mg:namespace="http://www.navis.com/argo">
-                            <mg:value-of mg:select="/flat_text/Flatfile/Weserve_Flatfile/Wt_Unit" />
+                            <mg:value-of mg:select="@IF(/flat_text/Flatfile/Weserve_Flatfile/Wt_Unit=='KG',/flat_text/Flatfile/Weserve_Flatfile/Wt_Unit,@IF(/flat_text/Flatfile/Weserve_Flatfile/Wt_Unit=='LB',/flat_text/Flatfile/Weserve_Flatfile/Wt_Unit,'QT'))" />
                         </mg:Attribute>
                         <mg:Attribute mg:name="edi:containerAssignedGateWt" mg:namespace="http://www.navis.com/argo">
                             <mg:value-of mg:select="''" />
