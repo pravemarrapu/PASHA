@@ -119,15 +119,10 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                         appendToMessageCollector("There is no Weight to update");
                                         log("There is no Weight to update");
                                     }
-                                    //convert VGM field to KG based on ctrGrossWtUnit if it is in LB's for comparision with fields such
-                                    // as Equipment Tare Wt, Safe Wt, Equipment Type Safe Wt and Tare Wt, because by default fields
-                                    //above fields will come here in KG's.
-                                    String convertedVgmWt = weightConversionForVGM(ctrGrossWt, VgmWt);
-
-                                    //convert VGM weight from KG to LB inorder to update to flex field
-                                    String roundedValue = convertKGtoLB(convertedVgmWt);
-                                    long lbRoundedVal = Math.round(roundedValue.toDouble());
-                                    activeUnit.setUnitFlexString12(lbRoundedVal.toString());
+                                    //restore the value before converting the VGM value into KG's so that up on rouding there will not
+                                    //be any difference.
+                                    String actualVgmWt = covertVGMWtKgToLb(ctrGrossWt, VgmWt);
+                                    activeUnit.setUnitFlexString12(actualVgmWt);
                                 }
                             } else {
                                 String eqTypeTareeWtLbVal = convertKGtoLB(eqTypeTareeWt.toString());
@@ -160,6 +155,10 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                             String roundedValue = convertKGtoLB(convertedVgmWt);
                             long lbRoundedVal = Math.round(roundedValue.toDouble());
 
+                            //restore the value before converting the VGM value into KG's so that up on rouding there will not
+                            //be any difference.
+                            String actualVgmWt = covertVGMWtKgToLb(ctrGrossWt, VgmWt);
+
                             //Tare Wt comparision
                             if (ctrTareWt == 0.0D) {
                                 Double eqTypeTareWt = eqType.getTareWeightKg();
@@ -181,14 +180,14 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                 eqTypeSafeWt = eqType.getEqtypSafeWeightKg();
 
                                 if (eqTypeSafeWt == 0.0D) {
-                                    activeUnit.setUnitFlexString12(lbRoundedVal.toString());
+                                    activeUnit.setUnitFlexString12(actualVgmWt);
                                 } else if (eqTypeSafeWt > 0.0D) {
                                     if (vgmRoundedValue > eqTypeSafeWt) {
                                         log("VgmRoundedValue " + vgmRoundedValue + "EqTypeSafeWt " + eqTypeSafeWt)
                                         appendToMessageCollector("Weight is greater than equipment type safe weight");
                                         log("Weight is greater than equipment type safe weight");
                                     } else {
-                                        activeUnit.setUnitFlexString12(lbRoundedVal.toString());
+                                        activeUnit.setUnitFlexString12(actualVgmWt);
                                     }
                                 }
                             } else {
@@ -197,7 +196,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                     appendToMessageCollector("Weight is greater than safe weight");
                                     log("Weight is greater than safe weight");
                                 } else {
-                                    activeUnit.setUnitFlexString12(lbRoundedVal.toString());
+                                    activeUnit.setUnitFlexString12(actualVgmWt);
                                 }
                             }
                             HibernateApi.getInstance().save(activeUnit);
@@ -277,33 +276,34 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
             String vesId = null;
             String vesName = null;
             EdiCarrierVisit vessel = preAdviseTransaction.getEdiOutboundVisit();
-            log("vessel  " + vessel);
-            if (vessel == null) {
-                appendToMessageCollector("File Does not contain OutVoyage / Lloyds / Vessel Name in Vessel Details");
-                return false;
-            } else if (vessel != null) {
-                EdiVesselVisit vesselVisit = vessel.getEdiVesselVisit();
-                if (vesselVisit != null) {
-                    outVoyageNbr = vesselVisit.getOutVoyageNbr();
-                    vesId = vesselVisit.getVesselId();
-                    vesName = vesselVisit.getVesselName();
+            if (!FreightKindEnum.MTY.equals(inUnit.getUnitFreightKind())) {
+                if (vessel == null) {
+                    appendToMessageCollector("File Does not contain OutVoyage / Lloyds / Vessel Name in Vessel Details");
+                    return false;
+                } else if (vessel != null) {
+                    EdiVesselVisit vesselVisit = vessel.getEdiVesselVisit();
+                    if (vesselVisit != null) {
+                        outVoyageNbr = vesselVisit.getOutVoyageNbr();
+                        vesId = vesselVisit.getVesselId();
+                        vesName = vesselVisit.getVesselName();
+                    }
                 }
-            }
-            VesselVisitDetails vvd = null;
-            String unitsLlyodsId = null;
-            if (inUnit.getUnitActiveUfvNowActive() != null && inUnit.getUnitActiveUfvNowActive().getUfvActualObCv() != null) {
-                vvd = VesselVisitDetails.resolveVvdFromCv(inUnit.getUnitActiveUfvNowActive().getUfvObCv());
-                if (vvd != null && vvd.getVvdVessel() != null) {
-                    unitsLlyodsId = vvd.getVvdVessel().getVesLloydsId();
-                    if (!(vesId.equals(unitsLlyodsId))) {
-                        appendToMessageCollector("Vessel Id  / Lloyds Id mismatch with Unit");
-                        return false;
-                    } else if (!(outVoyageNbr.equals(vvd.getVvdObVygNbr()))) {
-                        appendToMessageCollector("Outbound Voyage mismatch with Unit");
-                        return false;
-                    } else if (!(vesName.equals(vvd.getVvdVessel().getVesName()))) {
-                        appendToMessageCollector("Vessel Name mismatch with Unit");
-                        return false;
+                VesselVisitDetails vvd = null;
+                String unitsLlyodsId = null;
+                if (inUnit.getUnitActiveUfvNowActive() != null && inUnit.getUnitActiveUfvNowActive().getUfvActualObCv() != null) {
+                    vvd = VesselVisitDetails.resolveVvdFromCv(inUnit.getUnitActiveUfvNowActive().getUfvObCv());
+                    if (vvd != null && vvd.getVvdVessel() != null) {
+                        unitsLlyodsId = vvd.getVvdVessel().getVesLloydsId();
+                        if (!(vesId.equals(unitsLlyodsId))) {
+                            appendToMessageCollector("Vessel Id  / Lloyds Id mismatch with Unit");
+                            return false;
+                        } else if (!(outVoyageNbr.equals(vvd.getVvdObVygNbr()))) {
+                            appendToMessageCollector("Outbound Voyage mismatch with Unit");
+                            return false;
+                        } else if (!(vesName.equals(vvd.getVvdVessel().getVesName()))) {
+                            appendToMessageCollector("Vessel Name mismatch with Unit");
+                            return false;
+                        }
                     }
                 }
             }
@@ -383,6 +383,28 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
             roundedValue = convertLBtoKG(inVgmWt);
             long lbRoundedVal = Math.round(roundedValue.toDouble());
             return lbRoundedVal.toString();
+        }
+        return roundedValue;
+    }
+
+    /**
+     * This method will convert the VGM weight to lb's
+     * @param inCtrGrossWt
+     * @param inVgmWt
+     * @param inActiveUnit
+     * @return
+     */
+    private String covertVGMWtKgToLb(String inCtrGrossWt, String inVgmWt) {
+        String roundedValue = new String();
+        if ("KG".equals(inCtrGrossWt)) {
+            log("KG value setting to flex field");
+            roundedValue = convertKGtoLB(inVgmWt);
+            long lbRoundedVal = Math.round(roundedValue.toDouble());
+            return lbRoundedVal.toString();
+        } else if ("LB".equals(inCtrGrossWt)) {
+            log("LB value setting to flex field");
+            roundedValue = inVgmWt;
+            return roundedValue;
         }
         return roundedValue;
     }
