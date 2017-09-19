@@ -15,6 +15,7 @@ import com.navis.argo.PreadviseTransactionDocument
 import com.navis.argo.PreadviseTransactionsDocument
 import com.navis.argo.business.atoms.FreightKindEnum
 import com.navis.argo.business.atoms.UnitCategoryEnum
+import com.navis.argo.business.model.CarrierVisit
 import com.navis.argo.business.model.GeneralReference
 import com.navis.argo.business.reference.EquipType
 import com.navis.argo.business.reference.Equipment
@@ -295,7 +296,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 if (vvd != null && vvd.getVvdVessel() != null) {
                     unitsLlyodsId = vvd.getVvdVessel().getVesLloydsId();
                     if (!(vesId.equals(unitsLlyodsId))) {
-                        appendToMessageCollector("Lloyds Id mismatch with Unit");
+                        appendToMessageCollector("Vessel Id  / Lloyds Id mismatch with Unit");
                         return false;
                     } else if (!(outVoyageNbr.equals(vvd.getVvdObVygNbr()))) {
                         appendToMessageCollector("Outbound Voyage mismatch with Unit");
