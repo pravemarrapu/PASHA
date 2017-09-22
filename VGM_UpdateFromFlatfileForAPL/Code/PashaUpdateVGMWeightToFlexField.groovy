@@ -13,10 +13,9 @@ import com.navis.argo.EdiFlexFields
 import com.navis.argo.EdiVesselVisit
 import com.navis.argo.PreadviseTransactionDocument
 import com.navis.argo.PreadviseTransactionsDocument
+import com.navis.argo.business.atoms.BizRoleEnum
 import com.navis.argo.business.atoms.FreightKindEnum
 import com.navis.argo.business.atoms.UnitCategoryEnum
-import com.navis.argo.business.model.CarrierVisit
-import com.navis.argo.business.model.GeneralReference
 import com.navis.argo.business.reference.EquipType
 import com.navis.argo.business.reference.Equipment
 import com.navis.argo.business.reference.LineOperator
@@ -32,6 +31,7 @@ import com.navis.framework.util.unit.UnitUtils
 import com.navis.inventory.business.api.UnitFinder
 import com.navis.inventory.business.units.EqBaseOrder
 import com.navis.inventory.business.units.Unit
+import com.navis.vessel.business.operation.Vessel
 import com.navis.vessel.business.schedule.VesselVisitDetails
 import org.apache.xmlbeans.XmlObject
 
@@ -84,23 +84,26 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         }
         try {
             for (PreadviseTransactionDocument.PreadviseTransaction preAdviseTransaction : list) {
-                Unit activeUnit
+                Unit activeUnit = null;
+                String lineId = preAdviseTransaction.getEdiContainer() != null && preAdviseTransaction.getEdiContainer().getContainerOperator() != null ?
+                        preAdviseTransaction.getEdiContainer().getContainerOperator().getOperator() : null;
+                if (lineId != null) {
+                    sessionLineOperator = LineOperator.findScopedBizUnit(lineId, BizRoleEnum.LINEOP);
+                }
                 if (canProceedToUpdate(activeUnit, preAdviseTransaction, sessionLineOperator)) {
                     log("Active Unit :: " + activeUnit);
                     activeUnit = getUnit(preAdviseTransaction.getEdiContainer().getContainerNbr())
                     EdiContainer ctr = preAdviseTransaction.getEdiContainer()
-                    Equipment equipment = activeUnit.getUnitEquipment();
+                    Equipment equipment = activeUnit.getPrimaryEq();
                     log("Current Equipment :: " + equipment);
                     String ctrGrossWt = ctr.getContainerGrossWtUnit();
 
-                    Double ctrTareWt = 0.0D;
-                    ctrTareWt = equipment.getEqTareWeightKg();
-
-                    Double ctrSafeWt = 0.0D;
-                    ctrSafeWt = equipment.getEqSafeWeightKg();
-
+                    Double ctrTareWt = equipment.getEqTareWeightKg();
+                    Double ctrSafeWt = equipment.getEqSafeWeightKg();
                     EquipType eqType = equipment.getEqEquipType();
 
+                    //convert tare wt from KG to LB, by default value will come as KG so to persist in DB as LB's this
+                    //is needed.
                     String tareWtLbVal = convertKGtoLB(ctrTareWt.toString());
                     long tareWtRoundedVal = Math.round(tareWtLbVal.toDouble());
 
@@ -119,12 +122,14 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                         appendToMessageCollector("There is no Weight to update");
                                         log("There is no Weight to update");
                                     }
-                                    //restore the value before converting the VGM value into KG's so that up on rouding there will not
-                                    //be any difference.
+                                    //restore the value before converting the VGM value into KG's so that up on rouding
+                                    // there will not be any difference.
                                     String actualVgmWt = covertVGMWtKgToLb(ctrGrossWt, VgmWt);
                                     activeUnit.setUnitFlexString12(actualVgmWt);
                                 }
                             } else {
+                                //convert equipment type tare wt from KG to LB, by default value will come as KG so to
+                                // persist in DB as LB's this is needed.
                                 String eqTypeTareeWtLbVal = convertKGtoLB(eqTypeTareeWt.toString());
                                 long eqTypeTareeWtRoundedVal = Math.round(eqTypeTareeWtLbVal.toDouble());
                                 activeUnit.setUnitFlexString12(eqTypeTareeWtRoundedVal.toString());
@@ -145,9 +150,9 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                                 log("File Does not contain proper weight");
                             }
 
-                            //convert VGM field to KG based on ctrGrossWtUnit if it is in LB's for comparision with fields such
-                            // as Equipment Tare Wt, Safe Wt, Equipment Type Safe Wt and Tare Wt, because by default fields
-                            //above fields will come here in KG's.
+                            //convert VGM field to KG based on ctrGrossWtUnit if it is in LB's for comparision with
+                            // fields such as Equipment Tare Wt, Safe Wt, Equipment Type Safe Wt and Tare Wt, because by
+                            // default above fields will come here in KG's.
                             String convertedVgmWt = weightConversionForVGM(ctrGrossWt, VgmWt);
                             Double vgmRoundedValue = convertedVgmWt.toDouble();
 
@@ -155,8 +160,8 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                             String roundedValue = convertKGtoLB(convertedVgmWt);
                             long lbRoundedVal = Math.round(roundedValue.toDouble());
 
-                            //restore the value before converting the VGM value into KG's so that up on rouding there will not
-                            //be any difference.
+                            //restore the value before converting the VGM value into KG's so that up on rouding there
+                            // will not be any difference.
                             String actualVgmWt = covertVGMWtKgToLb(ctrGrossWt, VgmWt);
 
                             //Tare Wt comparision
@@ -239,20 +244,8 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
             if (inUnit.getUnitLineOperator() != null && inLineOperator != null) {
                 log("Unit Line Operator :: " + inUnit.getUnitLineOperator() + " and session Line Operator :: " + inLineOperator)
                 if (!(inUnit.getUnitLineOperator().equals(inLineOperator))) {
-                    GeneralReference lineOpGenRef = GeneralReference.findUniqueEntryById(LINE_OP_GEN_REF_ID, inLineOperator.getBzuId())
-                    log("Line Operator Gen reference :: " + lineOpGenRef)
-                    if (lineOpGenRef != null) {
-                        if (allRefValuesEmpty(lineOpGenRef)) {
-                            appendToMessageCollector("Line Operator mismatch with Unit");
-                            return false
-                        } else if (!matchesAnyRefValue(lineOpGenRef, inUnit.getUnitLineOperator().getBzuId())) {
-                            appendToMessageCollector("Line Operator mismatch with Unit");
-                            return false
-                        }
-                    } else {
-                        appendToMessageCollector("Line Operator mismatch with Unit");
-                        return false
-                    }
+                    appendToMessageCollector("Line Operator mismatch with Unit");
+                    return false;
                 }
             } else {
                 appendToMessageCollector("Required fields (Unit Line Operator / Session Line Operator) missing)");
@@ -292,17 +285,20 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 String unitsLlyodsId = null;
                 if (inUnit.getUnitActiveUfvNowActive() != null && inUnit.getUnitActiveUfvNowActive().getUfvActualObCv() != null) {
                     vvd = VesselVisitDetails.resolveVvdFromCv(inUnit.getUnitActiveUfvNowActive().getUfvObCv());
-                    if (vvd != null && vvd.getVvdVessel() != null) {
-                        unitsLlyodsId = vvd.getVvdVessel().getVesLloydsId();
-                        if (!(vesId.equals(unitsLlyodsId))) {
-                            appendToMessageCollector("Vessel Id  / Lloyds Id mismatch with Unit");
-                            return false;
-                        } else if (!(outVoyageNbr.equals(vvd.getVvdObVygNbr()))) {
-                            appendToMessageCollector("Outbound Voyage mismatch with Unit");
-                            return false;
-                        } else if (!(vesName.equals(vvd.getVvdVessel().getVesName()))) {
-                            appendToMessageCollector("Vessel Name mismatch with Unit");
-                            return false;
+                    if (vvd != null) {
+                        Vessel vsl = vvd.getVvdVessel();
+                        if (vsl != null) {
+                            unitsLlyodsId = vsl.getVesLloydsId();
+                            if (!(vesId.equals(unitsLlyodsId))) {
+                                appendToMessageCollector("Vessel Id  / Lloyds Id mismatch with Unit");
+                                return false;
+                            } else if (!(outVoyageNbr.equals(vvd.getVvdObVygNbr()))) {
+                                appendToMessageCollector("Outbound Voyage mismatch with Unit");
+                                return false;
+                            } else if (!(vesName.equals(vsl.getVesName()))) {
+                                appendToMessageCollector("Vessel Name mismatch with Unit");
+                                return false;
+                            }
                         }
                     }
                 }
@@ -311,27 +307,11 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
         return true;
     }
 
-    private boolean allRefValuesEmpty(GeneralReference generalReference) {
-        if (generalReference.getRefValue1() == null && generalReference.getRefValue2() == null && generalReference.getRefValue3() == null
-                && generalReference.getRefValue4() == null && generalReference.getRefValue5() == null && generalReference.getRefValue6() == null) {
-            return true
-        }
-        return false
-    }
-
-    private boolean matchesAnyRefValue(GeneralReference generalReference, String inUnitLineOpId) {
-        if (inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue1()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue2()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue3())
-                || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue4()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue5()) || inUnitLineOpId.equalsIgnoreCase(generalReference.getRefValue6())) {
-            return true
-        }
-        return false
-    }
-/**
- * To get the active export unit for the provided container number
- *
- * @param inCtrNbr
- * @return
- */
+    /**
+     * To get the active export unit for the provided container number
+     * @param inCtrNbr
+     * @return
+     */
     private Unit getUnit(String inCtrNbr) {
         Equipment eq = Equipment.findEquipment(inCtrNbr);
         if (eq == null) {
@@ -360,9 +340,9 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
      * @return
      */
     private static String convertLBtoKG(String inVgmWt) {
-        Double valueInLb = UnitUtils.convertTo(inVgmWt, MassUnitEnum.KILOGRAMS, MassUnitEnum.POUNDS);
-        //log("valueInKg " + inVgmWt + " => valueInLb : " + String.valueOf(valueInLb));
-        return String.valueOf(valueInLb);
+        Double valueInKG = UnitUtils.convertTo(inVgmWt, MassUnitEnum.KILOGRAMS, MassUnitEnum.POUNDS);
+        //log("valueInLB " + inVgmWt + " => valueInKG : " + String.valueOf(valueInKG));
+        return String.valueOf(valueInKG);
     }
 
     /**
@@ -374,12 +354,12 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
      */
     private String weightConversionForVGM(String inCtrGrossWt, String inVgmWt) {
         String roundedValue = new String();
-        if ("KG".equals(inCtrGrossWt)) {
-            log("KG value setting to flex field");
+        if (KG.equals(inCtrGrossWt)) {
+            log("VGM value is in KG no conversion is needed for comoaprision");
             roundedValue = inVgmWt;
             return roundedValue;
-        } else if ("LB".equals(inCtrGrossWt)) {
-            log("LB value setting to flex field");
+        } else if (LB.equals(inCtrGrossWt)) {
+            log("Converting VGM value to KG for comparision with Container Tare Wt and Safe Wt");
             roundedValue = convertLBtoKG(inVgmWt);
             long lbRoundedVal = Math.round(roundedValue.toDouble());
             return lbRoundedVal.toString();
@@ -396,13 +376,13 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
      */
     private String covertVGMWtKgToLb(String inCtrGrossWt, String inVgmWt) {
         String roundedValue = new String();
-        if ("KG".equals(inCtrGrossWt)) {
-            log("KG value setting to flex field");
+        if (KG.equals(inCtrGrossWt)) {
+            log("Converting VGM value to LB");
             roundedValue = convertKGtoLB(inVgmWt);
             long lbRoundedVal = Math.round(roundedValue.toDouble());
             return lbRoundedVal.toString();
-        } else if ("LB".equals(inCtrGrossWt)) {
-            log("LB value setting to flex field");
+        } else if (LB.equals(inCtrGrossWt)) {
+            log("VGM value is in LB");
             roundedValue = inVgmWt;
             return roundedValue;
         }
@@ -418,5 +398,7 @@ class PashaUpdateVGMWeightToFlexField extends AbstractEdiPostInterceptor {
                 .create(ArgoPropertyKeys.INFO, null, inMessage));
     }
 
-    private final String LINE_OP_GEN_REF_ID = "FLAT_FILE_LINE_OP";
+    private final String KG = "KG";
+    private final String LB = "LB";
+    private final String LINE_OP_GEN_REF_ID = "APL_VGM_LINE";
 }
